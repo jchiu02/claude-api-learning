@@ -1,0 +1,17 @@
+[
+  {
+    "task": "Extract the AWS account ID from an ARN (Amazon Resource Name) string",
+    "format": "regex",
+    "solution_criteria": "The regex should match and capture the 12-digit account ID from ARNs in the format arn:aws:service:region:account-id:resource"
+  },
+  {
+    "task": "Parse an AWS CloudFormation template and extract all resource logical IDs",
+    "format": "python",
+    "solution_criteria": "The function should accept a CloudFormation template dictionary, iterate through the 'Resources' key, and return a list of all resource logical IDs"
+  },
+  {
+    "task": "Create a valid AWS Lambda environment variables configuration object",
+    "format": "json",
+    "solution_criteria": "The JSON object should contain properly formatted environment variables with a key-value structure suitable for AWS Lambda function configuration"
+  }
+]
