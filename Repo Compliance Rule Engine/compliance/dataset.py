@@ -33,10 +33,19 @@ All evaluations are net and post-trade: take the current book, apply the propose
 - Positions in the same maturity window offset each other in net calculations
 </sign_convention>
 
+<rule_types>
+Each parent rule has a "type" that constrains its children's dimensions:
+- "concentration_maturity": children can only use dimension "maturity_month"
+- "counterparty": children can only use dimensions "counterparty", "counterparty_mtm", or "counterparty_pct"
+Do NOT mix dimension types within a single parent rule.
+</rule_types>
+
 <rule_dimensions>
-Child rules aggregate on one of two dimensions:
+Child rules aggregate on one of four dimensions:
 maturity_month - aggregate net notional across all positions maturing in a given month, check against a numeric range (lower_bound, upper_bound)
 counterparty - aggregate net notional across all positions with a given counterparty, check against a numeric range (lower_bound, upper_bound)
+counterparty_mtm - aggregate the mtm field (not notional) of all positions with a given counterparty, check against a numeric range
+counterparty_pct - aggregate net notional with a given counterparty, express as percentage of the child rule's total_limit. Bounds are percentages
 </rule_dimensions>
 
 <task>
@@ -64,13 +73,14 @@ Return a JSON array. Each element:
   "task": {
     "rules": [
       {
-        "parent_rule_id": "MATURITY_CONCENTRATION" or "COUNTERPARTY_EXPOSURE",
+        "parent_rule_id": integer (sequential starting from 1),
+        "type": "concentration_maturity" or "counterparty",
         "logic": "AND" or "OR",
         "children": [
           {
-            "id": "string identifier",
+            "id": integer (sequential starting from 1, continuing across parents),
             "description": "human readable rule",
-            "dimension": "maturity_month" or "counterparty",
+            "dimension": "maturity_month" or "counterparty" or "counterparty_mtm" or "counterparty_pct",
             "filter": "YYYY-MM for maturity_month, counterparty name for counterparty",
             "lower_bound": integer (GBP, can be negative),
             "upper_bound": integer (GBP, can be negative)
@@ -88,12 +98,12 @@ Return a JSON array. Each element:
   "expected": {
     "parent_results": [
       {
-        "parent_rule_id": "string",
+        "parent_rule_id": integer,
         "logic": "AND" or "OR",
         "breached": boolean,
         "child_results": [
           {
-            "id": "string",
+            "id": integer,
             "breached": boolean,
             "net_value": integer (calculated net for that dimension/filter post-trade),
             "lower_bound": integer,
@@ -118,6 +128,9 @@ Return a JSON array. Each element:
 - pm_override_required is true if and only if any parent_results entry has breached=true
 - For AND logic scenarios, deliberately include cases where some but not all children breach
 - Reasoning must reference specific calculated values and limits
+- Each parent rule's type must match its children's dimensions (concentration_maturity -> maturity_month only; counterparty -> counterparty/counterparty_mtm/counterparty_pct only)
+- Do NOT mix dimension types within a single parent rule
+- parent_rule_id and child id are integers, not strings
 </constraints>
 
 Generate 20 diverse test cases. Vary the scenario types across: clean pass, OR parent breached, AND parent breached, AND parent NOT breached (partial child breach only), net exposure reduced by trade, and edge cases at threshold."""

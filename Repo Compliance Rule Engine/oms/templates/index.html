@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Repo OMS — Portfolio Viewer</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <header>
+    <h1>Repo OMS</h1>
+    <div class="controls">
+      <label for="portfolio-select">Portfolio</label>
+      <select id="portfolio-select">
+        <option value="">Select a portfolio…</option>
+      </select>
+    </div>
+  </header>
+
+  <main>
+    <div id="empty-state" class="empty-state">Select a portfolio to view holdings</div>
+    <table id="positions-table" class="hidden">
+      <thead>
+        <tr>
+          <th class="col-bond">Bond</th>
+          <th class="col-isin">ISIN</th>
+          <th class="col-type">Type</th>
+          <th class="col-cpty">Counterparty</th>
+          <th class="col-tn">T+0</th>
+          <th class="col-tn">T+1</th>
+          <th class="col-tn">T+2</th>
+          <th class="col-tn">T+3</th>
+          <th class="col-tn">T+4</th>
+          <th class="col-tn">T+5</th>
+        </tr>
+      </thead>
+      <tbody id="positions-body"></tbody>
+    </table>
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

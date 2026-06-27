@@ -1,0 +1,2817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Repo Compliance Evaluation Report</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; }
+  .header { background: #f0f0f0; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
+  .summary-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+  .stat-box { background: #fff; border-radius: 5px; padding: 15px;
+               box-shadow: 0 2px 5px rgba(0,0,0,.1); flex-basis: 30%; min-width: 180px; }
+  .stat-value { font-size: 24px; font-weight: bold; margin-top: 5px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th { background: #4a4a4a; color: #fff; text-align: left; padding: 12px; }
+  td { padding: 10px; border-bottom: 1px solid #ddd; vertical-align: top; width: 18%; }
+  tr:nth-child(even) { background: #f9f9f9; }
+  pre { background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 8px;
+         font-size: 12px; white-space: pre-wrap; word-wrap: break-word; margin: 0; }
+  .score { font-weight: bold; padding: 5px 10px; border-radius: 3px; display: inline-block; }
+  .score-high { background: #c8e6c9; color: #2e7d32; }
+  .score-medium { background: #fff9c4; color: #f57f17; }
+  .score-low { background: #ffcdd2; color: #c62828; }
+  .score-col { width: 60px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Repo Compliance Engine — Evaluation Report</h1>
+  <div class="summary-stats">
+    <div class="stat-box"><div>Total Test Cases</div><div class="stat-value">26</div></div>
+    <div class="stat-box"><div>Average Score</div><div class="stat-value">9.4 / 10</div></div>
+    <div class="stat-box"><div>Pass Rate (≥7)</div><div class="stat-value">96.2%</div></div>
+  </div>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Scenario</th><th>Task</th><th>Expected</th>
+      <th>Engine Output</th><th>Score</th><th>Reasoning</th>
+    </tr>
+  </thead>
+  <tbody>
+        <tr>
+            <td>Clean pass: Single maturity rule within bounds</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "June 2026 maturity net notional limit",
+          "dimension": "maturity_month",
+          "filter": "2026-06",
+          "lower_bound": -500000000,
+          "upper_bound": 500000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Barclays",
+      "notional": 100000000,
+      "maturity": "2026-06-15"
+    },
+    {
+      "counterparty": "JPM",
+      "notional": -50000000,
+      "maturity": "2026-06-20"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Goldman Sachs",
+    "notional": 150000000,
+    "maturity": "2026-06-25"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": false,
+          "net_value": 200000000,
+          "lower_bound": -500000000,
+          "upper_bound": 500000000
+        }
+      ],
+      "reasoning": "June 2026 net = 100M + (-50M) + 150M = 200M, within [-500M, 500M]"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: All parent rules satisfied, no override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 200000000,
+          "lower_bound": -500000000,
+          "upper_bound": 500000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 1 aggregates net notional for maturity month 2026-06. Current book has Barclays +100M and JPM -50M. Proposed trade adds Goldman Sachs +150M. Net post-trade: 100 - 50 + 150 = 200M GBP. This falls within the bounds [-500M, 500M], so the child rule is not breached. Parent rule uses AND logic with only one child, so parent is not breached."
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "Trade approved. No rule breaches detected."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is functionally equivalent to the ground truth across all critical dimensions. The `pm_override_required` flag is correctly set to false. The child rule correctly identifies no breach (200M within bounds). The parent rule correctly applies AND logic: with only one child and that child not breached, the parent is not breached. The net_value calculation is accurate (100 + (-50) + 150 = 200). The reasoning is comprehensive and cites specific numbers. The verdict is correct. The only minor deviation is field ordering in the JSON structure, which does not affect semantic correctness or compliance evaluation.</td>
+        </tr>
+        <tr>
+            <td>OR parent breached: One of two counterparty children triggers limit</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "OR",
+      "children": [
+        {
+          "id": 1,
+          "description": "Barclays net counterparty exposure",
+          "dimension": "counterparty",
+          "filter": "Barclays",
+          "lower_bound": -200000000,
+          "upper_bound": 200000000
+        },
+        {
+          "id": 2,
+          "description": "JPM net counterparty exposure",
+          "dimension": "counterparty",
+          "filter": "JPM",
+          "lower_bound": -200000000,
+          "upper_bound": 200000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Barclays",
+      "notional": 180000000,
+      "maturity": "2026-06-15"
+    },
+    {
+      "counterparty": "JPM",
+      "notional": 50000000,
+      "maturity": "2026-07-10"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Barclays",
+    "notional": 100000000,
+    "maturity": "2026-08-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "OR",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 280000000,
+          "lower_bound": -200000000,
+          "upper_bound": 200000000
+        },
+        {
+          "id": 2,
+          "breached": false,
+          "net_value": 50000000,
+          "lower_bound": -200000000,
+          "upper_bound": 200000000
+        }
+      ],
+      "reasoning": "Barclays net = 180M + 100M = 280M, exceeds upper bound of 200M. OR logic: breach triggered by at least one child"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: Barclays exposure breach requires PM override"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "OR",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 280000000,
+          "lower_bound": -200000000,
+          "upper_bound": 200000000,
+          "breached": true
+        },
+        {
+          "id": 2,
+          "net_value": 50000000,
+          "lower_bound": -200000000,
+          "upper_bound": 200000000,
+          "breached": false
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 (Barclays counterparty exposure) is breached: post-trade net notional is 280,000,000 GBP (180,000,000 existing + 100,000,000 proposed), which exceeds the upper bound of 200,000,000 GBP. Child rule 2 (JPM counterparty exposure) is not breached at 50,000,000 GBP. Under OR logic, the parent rule is breached because at least one child rule is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected: Barclays counterparty exposure would reach 280,000,000 GBP, exceeding the 200,000,000 GBP limit. PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is fully correct across all critical dimensions. The parent rule (OR logic) is correctly identified as breached because child rule 1 (Barclays) breaches its upper bound at 280M vs 200M limit. Child rule 2 (JPM) correctly shows no breach at 50M. The OR logic is properly applied: since at least one child is breached, the parent is breached. The pm_override_required flag is correctly set to true, and the verdict accurately reflects the breach with specific numerical justification. The reasoning explicitly cites the post-trade notional (280M), the existing exposure (180M), the proposed trade (100M), and the limit (200M), making it fully transparent and auditable.</td>
+        </tr>
+        <tr>
+            <td>Both parent rules breached: Maturity and counterparty limits both exceeded</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "June 2026 maturity concentration",
+          "dimension": "maturity_month",
+          "filter": "2026-06",
+          "lower_bound": -100000000,
+          "upper_bound": 100000000
+        }
+      ]
+    },
+    {
+      "parent_rule_id": 2,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 2,
+          "description": "Goldman Sachs counterparty exposure",
+          "dimension": "counterparty",
+          "filter": "Goldman Sachs",
+          "lower_bound": -100000000,
+          "upper_bound": 100000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Goldman Sachs",
+      "notional": 80000000,
+      "maturity": "2026-06-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Goldman Sachs",
+    "notional": 80000000,
+    "maturity": "2026-06-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 160000000,
+          "lower_bound": -100000000,
+          "upper_bound": 100000000
+        }
+      ],
+      "reasoning": "June 2026 net = 80M + 80M = 160M, exceeds 100M upper bound"
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 2,
+          "breached": true,
+          "net_value": 160000000,
+          "lower_bound": -100000000,
+          "upper_bound": 100000000
+        }
+      ],
+      "reasoning": "Goldman Sachs net = 80M + 80M = 160M, exceeds 100M upper bound"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: Both maturity concentration and counterparty exposure breached. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 160000000,
+          "lower_bound": -100000000,
+          "upper_bound": 100000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 (June 2026 maturity concentration) aggregates all positions maturing in 2026-06. Current book has 80,000,000 GBP (Goldman Sachs, maturity 2026-06-15). Proposed trade adds 80,000,000 GBP (Goldman Sachs, maturity 2026-06-20). Both fall within the 2026-06 filter month. Net post-trade value is 160,000,000 GBP, which exceeds the upper_bound of 100,000,000 GBP. Child rule is breached. Parent uses AND logic with only one child, so parent is breached."
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 2,
+          "net_value": 160000000,
+          "lower_bound": -100000000,
+          "upper_bound": 100000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 2 (Goldman Sachs counterparty exposure) aggregates all positions with Goldman Sachs. Current book has 80,000,000 GBP. Proposed trade adds 80,000,000 GBP with the same counterparty. Net post-trade value is 160,000,000 GBP, which exceeds the upper_bound of 100,000,000 GBP. Child rule is breached. Parent uses AND logic with only one child, so parent is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected. Both parent rules breached: June 2026 maturity concentration and Goldman Sachs counterparty exposure both exceed 100,000,000 GBP limit. PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">9</span></td>
+            <td>The engine output is functionally and mathematically correct. Both parent rules breach because their single children breach: Rule 1 aggregates June 2026 positions (80M + 80M = 160M > 100M limit), and Rule 2 aggregates Goldman Sachs positions (80M + 80M = 160M > 100M limit). The AND logic is correctly applied (single child breach → parent breach). The `pm_override_required` flag is correctly set to true. The verdict accurately reflects the dual breach scenario. The reasoning provided is substantive and cites specific values. No mathematical errors or logic violations detected.</td>
+        </tr>
+        <tr>
+            <td>AND parent NOT breached: Only one child breaches, other within bounds</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "June 2026 maturity limit",
+          "dimension": "maturity_month",
+          "filter": "2026-06",
+          "lower_bound": -50000000,
+          "upper_bound": 50000000
+        },
+        {
+          "id": 2,
+          "description": "July 2026 maturity limit",
+          "dimension": "maturity_month",
+          "filter": "2026-07",
+          "lower_bound": -200000000,
+          "upper_bound": 200000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Barclays",
+      "notional": 100000000,
+      "maturity": "2026-06-15"
+    },
+    {
+      "counterparty": "JPM",
+      "notional": -50000000,
+      "maturity": "2026-07-10"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Goldman Sachs",
+    "notional": -30000000,
+    "maturity": "2026-06-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 70000000,
+          "lower_bound": -50000000,
+          "upper_bound": 50000000
+        },
+        {
+          "id": 2,
+          "breached": false,
+          "net_value": -50000000,
+          "lower_bound": -200000000,
+          "upper_bound": 200000000
+        }
+      ],
+      "reasoning": "June net = 100M + (-30M) = 70M, exceeds 50M upper bound. July net = -50M, within [-200M, 200M]. AND logic requires ALL children breached; only one breached, so parent not breached"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: AND parent not triggered (only partial child breach). No override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 70000000,
+          "lower_bound": -50000000,
+          "upper_bound": 50000000,
+          "breached": true
+        },
+        {
+          "id": 2,
+          "net_value": -50000000,
+          "lower_bound": -200000000,
+          "upper_bound": 200000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Parent rule 1 uses AND logic, so it is breached only if ALL children are breached. Child rule 1 (June 2026) is breached: net notional is 70,000,000 GBP (Barclays 100M + Goldman Sachs -30M), which exceeds the upper bound of 50,000,000 GBP. Child rule 2 (July 2026) is not breached: net notional is -50,000,000 GBP (JPM -50M), which falls within the range [-200,000,000, 200,000,000]. Since not all children are breached, the parent rule is not breached."
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "Trade accepted. Child rule 1 is breached but parent rule uses AND logic requiring all children to breach. Only one child breached, so parent rule not breached and no PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is fully correct across all critical dimensions. Child 1 (June 2026) correctly identifies a breach: net notional of 70M exceeds the 50M upper bound. Child 2 (July 2026) correctly shows no breach: -50M is within [-200M, 200M]. The AND logic is correctly applied: since only one child breaches (not all), the parent rule is not breached. The `pm_override_required` flag is correctly set to false, and the verdict properly approves the trade. The reasoning cites specific numbers and correctly explains the AND logic semantics. All calculations are accurate and the output matches the ground truth in substance and structure.</td>
+        </tr>
+        <tr>
+            <td>Net exposure reduced: Trade offsets existing position, moves within bounds</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "Barclays net exposure control",
+          "dimension": "counterparty",
+          "filter": "Barclays",
+          "lower_bound": -150000000,
+          "upper_bound": 150000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Barclays",
+      "notional": 200000000,
+      "maturity": "2026-06-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Barclays",
+    "notional": -80000000,
+    "maturity": "2026-07-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": false,
+          "net_value": 120000000,
+          "lower_bound": -150000000,
+          "upper_bound": 150000000
+        }
+      ],
+      "reasoning": "Barclays net = 200M + (-80M) = 120M, within [-150M, 150M]. Trade reduces exposure from 200M to 120M, resolving prior breach potential"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: Offsetting trade brings exposure within bounds"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 120000000,
+          "lower_bound": -150000000,
+          "upper_bound": 150000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 1 (Barclays net exposure control) aggregates all positions with counterparty Barclays. Current book has +200000000 GBP (reverse repo). Proposed trade adds -80000000 GBP (repo). Net post-trade: 200000000 + (-80000000) = 120000000 GBP. This falls within the bounds [-150000000, 150000000], so the child rule is not breached. Parent rule uses AND logic with a single child, so parent is not breached."
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "Trade approved. Barclays net exposure of 120000000 GBP remains within the -150000000 to 150000000 GBP limit."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">9</span></td>
+            <td>The engine output is mathematically and logically sound. It correctly computes the post-trade net exposure (120M), validates it against bounds [-150M, 150M], applies AND logic correctly (single non-breached child → non-breached parent), and sets pm_override_required to false. The verdict is correct. The reasoning is detailed and accurate, though it could have been slightly enriched by explicitly noting that the offsetting trade reduces the counterparty exposure, which is the key risk-management insight of this scenario. This is a minor omission in narrative framing rather than a substantive error.</td>
+        </tr>
+        <tr>
+            <td>Net exposure increased: Trade exacerbates position, exceeds limit</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "JPM net exposure cap",
+          "dimension": "counterparty",
+          "filter": "JPM",
+          "lower_bound": -300000000,
+          "upper_bound": 300000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "JPM",
+      "notional": 250000000,
+      "maturity": "2026-06-15"
+    },
+    {
+      "counterparty": "JPM",
+      "notional": 30000000,
+      "maturity": "2026-08-10"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "JPM",
+    "notional": 50000000,
+    "maturity": "2026-09-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 330000000,
+          "lower_bound": -300000000,
+          "upper_bound": 300000000
+        }
+      ],
+      "reasoning": "JPM net = 250M + 30M + 50M = 330M, exceeds upper bound of 300M. Trade adds to already high exposure, triggering breach"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: JPM exposure exceeds cap by 30M. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 330000000,
+          "lower_bound": -300000000,
+          "upper_bound": 300000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 (JPM net exposure cap) aggregates all JPM positions post-trade: 250000000 + 30000000 + 50000000 = 330000000 GBP. This net value of 330000000 exceeds the upper_bound of 300000000, so the child rule is breached. The parent rule uses AND logic with only one child, so the parent is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected: JPM net exposure would reach 330M GBP, exceeding the 300M GBP limit. PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output correctly identifies that JPM's post-trade net exposure (330M GBP) exceeds the upper bound (300M GBP) by 30M. The child rule (id=1) is breached because 330M > 300M. The parent rule uses AND logic with only one child; since that child is breached, the parent is correctly breached. The `pm_override_required` flag is correctly set to true, and the verdict accurately reflects the rejection reason with specific numbers. All calculations are correct, and the logic flow matches the ground truth exactly.</td>
+        </tr>
+        <tr>
+            <td>Edge case at threshold: Net value exactly at upper bound</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "Morgan Stanley exposure limit",
+          "dimension": "counterparty",
+          "filter": "Morgan Stanley",
+          "lower_bound": -250000000,
+          "upper_bound": 250000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Morgan Stanley",
+      "notional": 180000000,
+      "maturity": "2026-06-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Morgan Stanley",
+    "notional": 70000000,
+    "maturity": "2026-07-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": false,
+          "net_value": 250000000,
+          "lower_bound": -250000000,
+          "upper_bound": 250000000
+        }
+      ],
+      "reasoning": "Morgan Stanley net = 180M + 70M = 250M, exactly equals upper bound. Values at threshold are within bounds (inclusive)"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: Exposure exactly at limit threshold, within acceptable range"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 250000000,
+          "lower_bound": -250000000,
+          "upper_bound": 250000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 1 aggregates net notional for Morgan Stanley across the book. Current position: 180,000,000 GBP. Proposed trade adds 70,000,000 GBP. Post-trade net notional: 250,000,000 GBP. This equals the upper_bound of 250,000,000 GBP, so it is within the range [−250,000,000, 250,000,000]. Child rule is not breached. Parent rule uses AND logic with only one child, so parent is not breached."
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "Trade approved. Morgan Stanley net exposure post-trade is 250,000,000 GBP, exactly at the upper limit but not exceeding it."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is fully correct across all critical dimensions. The net_value of 250,000,000 GBP is accurately calculated (180M current + 70M proposed). The breach logic correctly identifies that this value equals the upper_bound and is therefore within the inclusive range [−250,000,000, 250,000,000]. The AND-logic parent with a single non-breached child correctly evaluates to not breached. The pm_override_required flag is correctly set to false, and the verdict appropriately approves the trade with explicit reference to the threshold condition. The reasoning is detailed and cites specific numbers throughout. This is a textbook correct evaluation of an edge case at the upper threshold.</td>
+        </tr>
+        <tr>
+            <td>Edge case at threshold: Net value exactly at lower bound</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "Citi exposure band",
+          "dimension": "counterparty",
+          "filter": "Citi",
+          "lower_bound": -175000000,
+          "upper_bound": 175000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Citi",
+      "notional": -100000000,
+      "maturity": "2026-06-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Citi",
+    "notional": -75000000,
+    "maturity": "2026-08-10"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": false,
+          "net_value": -175000000,
+          "lower_bound": -175000000,
+          "upper_bound": 175000000
+        }
+      ],
+      "reasoning": "Citi net = -100M + (-75M) = -175M, exactly equals lower bound. At-threshold values satisfy bounds (inclusive)"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: Exposure exactly at lower threshold, within acceptable range"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": -175000000,
+          "lower_bound": -175000000,
+          "upper_bound": 175000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 1 aggregates net notional for counterparty Citi across the book. Current book has -100000000; proposed trade adds -75000000, resulting in net -175000000. This value equals the lower_bound of -175000000, which is within the inclusive range [-175000000, 175000000]. The child rule is not breached. Parent rule 1 uses AND logic with a single child; since the child is not breached, the parent is not breached."
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "Trade approved. Post-trade Citi net notional of -175000000 GBP is within the permitted band of ±175000000 GBP. No PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output demonstrates full correctness across all critical dimensions. The net notional is accurately computed as -175,000,000 (current book -100M plus proposed trade -75M). The breach determination correctly treats the lower bound as inclusive, so equality with -175,000,000 satisfies the constraint [-175,000,000, 175,000,000]. The AND logic is properly applied: with one child rule and that child not breached, the parent rule is not breached. The pm_override_required flag is correctly set to false, and the verdict appropriately approves the trade. The reasoning explicitly cites specific numbers and explains the inclusive boundary logic, exceeding the ground truth's brevity. No mathematical, logical, or policy errors are present.</td>
+        </tr>
+        <tr>
+            <td>Multiple parent rules: First breached, second clean</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "June 2026 concentration limit",
+          "dimension": "maturity_month",
+          "filter": "2026-06",
+          "lower_bound": -100000000,
+          "upper_bound": 100000000
+        }
+      ]
+    },
+    {
+      "parent_rule_id": 2,
+      "type": "counterparty",
+      "logic": "OR",
+      "children": [
+        {
+          "id": 2,
+          "description": "HSBC exposure check",
+          "dimension": "counterparty",
+          "filter": "HSBC",
+          "lower_bound": -300000000,
+          "upper_bound": 300000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "HSBC",
+      "notional": 80000000,
+      "maturity": "2026-06-15"
+    },
+    {
+      "counterparty": "Barclays",
+      "notional": 50000000,
+      "maturity": "2026-07-20"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "HSBC",
+    "notional": 80000000,
+    "maturity": "2026-06-25"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 160000000,
+          "lower_bound": -100000000,
+          "upper_bound": 100000000
+        }
+      ],
+      "reasoning": "June net = 80M + 80M = 160M, exceeds 100M upper bound"
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "OR",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 2,
+          "breached": false,
+          "net_value": 160000000,
+          "lower_bound": -300000000,
+          "upper_bound": 300000000
+        }
+      ],
+      "reasoning": "HSBC net = 80M + 80M = 160M, within [-300M, 300M]"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: Maturity concentration breach requires PM override"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 160000000,
+          "lower_bound": -100000000,
+          "upper_bound": 100000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 (June 2026 concentration) aggregates all positions maturing in 2026-06. Current book has HSBC 80000000 (2026-06-15). Proposed trade adds HSBC 80000000 (2026-06-25). Both fall within 2026-06, so net_value = 80000000 + 80000000 = 160000000 GBP. This exceeds the upper_bound of 100000000, so the child rule is breached. Parent uses AND logic with only one child, so parent is breached."
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "OR",
+      "child_results": [
+        {
+          "id": 2,
+          "net_value": 160000000,
+          "lower_bound": -300000000,
+          "upper_bound": 300000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 2 (HSBC exposure) aggregates all positions with counterparty HSBC. Current book has HSBC 80000000. Proposed trade adds HSBC 80000000. Net_value = 80000000 + 80000000 = 160000000 GBP. This falls within the range [-300000000, 300000000], so the child rule is not breached. Parent uses OR logic with only one child, so parent is not breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "PM override required. Parent rule 1 (concentration_maturity) is breached: June 2026 net notional of 160000000 GBP exceeds the upper limit of 100000000 GBP."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is fully correct across all critical dimensions. Parent rule 1 (concentration_maturity with AND logic) correctly identifies a breach: the June 2026 net notional of 160M (80M existing HSBC + 80M proposed HSBC) exceeds the upper bound of 100M. Parent rule 2 (counterparty with OR logic) correctly identifies no breach: the HSBC net notional of 160M falls within [-300M, 300M]. The AND logic is properly applied—with one child breached, the parent is breached. The OR logic is properly applied—with one child not breached, the parent is not breached. The pm_override_required flag is correctly set to true, and the verdict accurately reflects the maturity concentration breach. All net_value calculations are accurate, and the reasoning provides specific numbers and clear logic flow.</td>
+        </tr>
+        <tr>
+            <td>Multiple parent rules: Both breached simultaneously</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "September 2026 limit",
+          "dimension": "maturity_month",
+          "filter": "2026-09",
+          "lower_bound": -120000000,
+          "upper_bound": 120000000
+        }
+      ]
+    },
+    {
+      "parent_rule_id": 2,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 2,
+          "description": "BNP Paribas counterparty limit",
+          "dimension": "counterparty",
+          "filter": "BNP Paribas",
+          "lower_bound": -120000000,
+          "upper_bound": 120000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "BNP Paribas",
+      "notional": 100000000,
+      "maturity": "2026-09-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "BNP Paribas",
+    "notional": 50000000,
+    "maturity": "2026-09-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 150000000,
+          "lower_bound": -120000000,
+          "upper_bound": 120000000
+        }
+      ],
+      "reasoning": "September net = 100M + 50M = 150M, exceeds 120M upper bound"
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 2,
+          "breached": true,
+          "net_value": 150000000,
+          "lower_bound": -120000000,
+          "upper_bound": 120000000
+        }
+      ],
+      "reasoning": "BNP Paribas net = 100M + 50M = 150M, exceeds 120M upper bound"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: Both maturity and counterparty limits breached. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 150000000,
+          "lower_bound": -120000000,
+          "upper_bound": 120000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 (September 2026 maturity limit) aggregates all positions maturing in 2026-09. Current book has 100000000 GBP notional; proposed trade adds 50000000 GBP notional, both in the same maturity month. Post-trade net value is 150000000 GBP, which exceeds the upper_bound of 120000000 GBP. Child rule is breached. Parent rule 1 uses AND logic with only one child, so parent is breached."
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 2,
+          "net_value": 150000000,
+          "lower_bound": -120000000,
+          "upper_bound": 120000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 2 (BNP Paribas counterparty limit) aggregates all positions with BNP Paribas. Current book has 100000000 GBP notional; proposed trade adds 50000000 GBP notional with the same counterparty. Post-trade net value is 150000000 GBP, which exceeds the upper_bound of 120000000 GBP. Child rule is breached. Parent rule 2 uses AND logic with only one child, so parent is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected. Both parent rules breached: September 2026 maturity concentration and BNP Paribas counterparty exposure both exceed 120000000 GBP limit post-trade. PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output correctly identifies that both parent rules are breached. Parent rule 1 (concentration_maturity) has one child rule that aggregates September 2026 positions: 100M (current) + 50M (proposed) = 150M, exceeding the 120M upper bound. Parent rule 2 (counterparty) has one child rule that aggregates BNP Paribas positions: 100M + 50M = 150M, exceeding the 120M upper bound. Both parents use AND logic with a single child each; since the child breaches, the parent breaches. The pm_override_required flag is correctly set to true. All net_values are mathematically accurate. The reasoning provided is comprehensive and cites specific numbers. The output matches the ground truth on all critical dimensions.</td>
+        </tr>
+        <tr>
+            <td>OR parent with multiple children: One breaches, others clean</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "OR",
+      "children": [
+        {
+          "id": 1,
+          "description": "Barclays monitoring threshold",
+          "dimension": "counterparty",
+          "filter": "Barclays",
+          "lower_bound": -180000000,
+          "upper_bound": 180000000
+        },
+        {
+          "id": 2,
+          "description": "Goldman Sachs monitoring threshold",
+          "dimension": "counterparty",
+          "filter": "Goldman Sachs",
+          "lower_bound": -180000000,
+          "upper_bound": 180000000
+        },
+        {
+          "id": 3,
+          "description": "Deutsche Bank monitoring threshold",
+          "dimension": "counterparty",
+          "filter": "Deutsche Bank",
+          "lower_bound": -180000000,
+          "upper_bound": 180000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Barclays",
+      "notional": 150000000,
+      "maturity": "2026-06-15"
+    },
+    {
+      "counterparty": "Goldman Sachs",
+      "notional": 100000000,
+      "maturity": "2026-07-10"
+    },
+    {
+      "counterparty": "Deutsche Bank",
+      "notional": 50000000,
+      "maturity": "2026-08-20"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Goldman Sachs",
+    "notional": 100000000,
+    "maturity": "2026-09-15"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "OR",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": false,
+          "net_value": 150000000,
+          "lower_bound": -180000000,
+          "upper_bound": 180000000
+        },
+        {
+          "id": 2,
+          "breached": true,
+          "net_value": 200000000,
+          "lower_bound": -180000000,
+          "upper_bound": 180000000
+        },
+        {
+          "id": 3,
+          "breached": false,
+          "net_value": 50000000,
+          "lower_bound": -180000000,
+          "upper_bound": 180000000
+        }
+      ],
+      "reasoning": "Goldman Sachs net = 100M + 100M = 200M, exceeds 180M. OR logic: breach triggered by at least one child breach (Goldman breaches)"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: Goldman Sachs counterparty exposure exceeds threshold. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "OR",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 150000000,
+          "lower_bound": -180000000,
+          "upper_bound": 180000000,
+          "breached": false
+        },
+        {
+          "id": 2,
+          "net_value": 200000000,
+          "lower_bound": -180000000,
+          "upper_bound": 180000000,
+          "breached": true
+        },
+        {
+          "id": 3,
+          "net_value": 50000000,
+          "lower_bound": -180000000,
+          "upper_bound": 180000000,
+          "breached": false
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 2 (Goldman Sachs) is breached: post-trade net notional is 200000000 GBP, which exceeds the upper bound of 180000000 GBP. Under OR logic, the parent rule is breached because at least one child rule is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected: Goldman Sachs counterparty exposure would reach 200M GBP, exceeding the 180M GBP limit. PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is essentially perfect. It correctly identifies that Goldman Sachs (child rule 2) breaches with a net_value of 200M GBP against an upper_bound of 180M GBP. Under OR logic, this single child breach correctly triggers the parent rule breach. The pm_override_required flag is correctly set to true, and the verdict appropriately rejects the trade with clear reasoning. All numerical values match the ground truth exactly. The only minor gap is that the reasoning could have been marginally more explicit about the composition of the 200M figure (existing 100M + proposed 100M), but this is a very minor omission that does not affect correctness.</td>
+        </tr>
+        <tr>
+            <td>Four parent rules with mixed outcomes: Maturity and counterparty rules split by type</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "October 2026 limit",
+          "dimension": "maturity_month",
+          "filter": "2026-10",
+          "lower_bound": -80000000,
+          "upper_bound": 80000000
+        }
+      ]
+    },
+    {
+      "parent_rule_id": 2,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 2,
+          "description": "JPM counterparty limit",
+          "dimension": "counterparty",
+          "filter": "JPM",
+          "lower_bound": -80000000,
+          "upper_bound": 80000000
+        }
+      ]
+    },
+    {
+      "parent_rule_id": 3,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 3,
+          "description": "November 2026 check",
+          "dimension": "maturity_month",
+          "filter": "2026-11",
+          "lower_bound": -400000000,
+          "upper_bound": 400000000
+        }
+      ]
+    },
+    {
+      "parent_rule_id": 4,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 4,
+          "description": "Citi counterparty check",
+          "dimension": "counterparty",
+          "filter": "Citi",
+          "lower_bound": -400000000,
+          "upper_bound": 400000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "JPM",
+      "notional": 90000000,
+      "maturity": "2026-10-15"
+    },
+    {
+      "counterparty": "Citi",
+      "notional": 200000000,
+      "maturity": "2026-11-20"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "JPM",
+    "notional": 50000000,
+    "maturity": "2026-10-25"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 140000000,
+          "lower_bound": -80000000,
+          "upper_bound": 80000000
+        }
+      ],
+      "reasoning": "October net = 90M + 50M = 140M, exceeds 80M upper bound"
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 2,
+          "breached": true,
+          "net_value": 140000000,
+          "lower_bound": -80000000,
+          "upper_bound": 80000000
+        }
+      ],
+      "reasoning": "JPM net = 90M + 50M = 140M, exceeds 80M upper bound"
+    },
+    {
+      "parent_rule_id": 3,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 3,
+          "breached": false,
+          "net_value": 200000000,
+          "lower_bound": -400000000,
+          "upper_bound": 400000000
+        }
+      ],
+      "reasoning": "November net = 200M, within [-400M, 400M]"
+    },
+    {
+      "parent_rule_id": 4,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 4,
+          "breached": false,
+          "net_value": 200000000,
+          "lower_bound": -400000000,
+          "upper_bound": 400000000
+        }
+      ],
+      "reasoning": "Citi net = 200M, within [-400M, 400M]"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: October maturity and JPM counterparty limits both exceeded. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 140000000,
+          "lower_bound": -80000000,
+          "upper_bound": 80000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "October 2026 maturity positions: current book has JPM 90000000 (2026-10-15), proposed trade adds JPM 50000000 (2026-10-25). Net notional = 90000000 + 50000000 = 140000000 GBP. This exceeds the upper_bound of 80000000, so child rule 1 is breached. Parent rule 1 uses AND logic with one child, so parent is breached."
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 2,
+          "net_value": 140000000,
+          "lower_bound": -80000000,
+          "upper_bound": 80000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "JPM counterparty positions: current book has JPM 90000000 (2026-10-15), proposed trade adds JPM 50000000 (2026-10-25). Net notional with JPM = 90000000 + 50000000 = 140000000 GBP. This exceeds the upper_bound of 80000000, so child rule 2 is breached. Parent rule 2 uses AND logic with one child, so parent is breached."
+    },
+    {
+      "parent_rule_id": 3,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 3,
+          "net_value": 200000000,
+          "lower_bound": -400000000,
+          "upper_bound": 400000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "November 2026 maturity positions: current book has Citi 200000000 (2026-11-20). Proposed trade is JPM with October 2026 maturity, so it does not affect November 2026. Net notional for November 2026 = 200000000 GBP. This falls within the range [-400000000, 400000000], so child rule 3 is not breached. Parent rule 3 uses AND logic with one child, so parent is not breached."
+    },
+    {
+      "parent_rule_id": 4,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 4,
+          "net_value": 200000000,
+          "lower_bound": -400000000,
+          "upper_bound": 400000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Citi counterparty positions: current book has Citi 200000000 (2026-11-20). Proposed trade is JPM, so it does not affect Citi positions. Net notional with Citi = 200000000 GBP. This falls within the range [-400000000, 400000000], so child rule 4 is not breached. Parent rule 4 uses AND logic with one child, so parent is not breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade breaches parent rules 1 and 2. JPM October 2026 net notional would reach 140000000 GBP, exceeding the 80000000 limit on both maturity concentration and counterparty exposure. PM override is required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output demonstrates complete correctness on all critical dimensions. The pm_override_required flag is true (matching ground truth). All four parent rules have correct breach statuses: rules 1 and 2 breach (net 140M exceeds 80M limit), rules 3 and 4 do not breach (net 200M within 400M limit). Net value calculations are precise: October 2026 maturity aggregates to 90M + 50M = 140M; JPM counterparty aggregates to 90M + 50M = 140M; November 2026 remains 200M (proposed trade is October); Citi remains 200M (proposed trade is JPM). The AND logic is correctly applied — each parent with a single child inherits the child's breach status. The reasoning provided is thorough and cites specific numbers. The only minor deviation is the verdict phrasing, which is stylistic rather than substantive.</td>
+        </tr>
+        <tr>
+            <td>Negative notional repo: Short position reduces maturity exposure</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "June 2026 net concentration",
+          "dimension": "maturity_month",
+          "filter": "2026-06",
+          "lower_bound": -300000000,
+          "upper_bound": 300000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Barclays",
+      "notional": 400000000,
+      "maturity": "2026-06-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "JPM",
+    "notional": -200000000,
+    "maturity": "2026-06-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": false,
+          "net_value": 200000000,
+          "lower_bound": -300000000,
+          "upper_bound": 300000000
+        }
+      ],
+      "reasoning": "June net = 400M + (-200M) = 200M, within [-300M, 300M]. Negative notional repo reduces net exposure significantly"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: Short position offsets long exposure, within bounds"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 200000000,
+          "lower_bound": -300000000,
+          "upper_bound": 300000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 1 aggregates net notional for maturity month 2026-06. Current book has Barclays reverse repo of +400000000 GBP. Proposed trade adds JPM repo of -200000000 GBP, both in June 2026. Net post-trade: 400000000 + (-200000000) = 200000000 GBP. This falls within the bounds [-300000000, 300000000], so the child rule is not breached. Parent rule uses AND logic with only one child, so parent is not breached."
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "Trade approved. June 2026 net concentration of 200000000 GBP remains within the -300000000 to 300000000 GBP limit."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">9</span></td>
+            <td>The engine output is mathematically and logically sound. The net_value of 200,000,000 is correctly computed from the current book position (400M) plus the proposed trade (-200M). The child rule is not breached (200M is within [-300M, 300M]), and the parent rule with AND logic correctly evaluates to not breached since its single child is not breached. The pm_override_required flag is correctly set to false, and the verdict appropriately approves the trade. The reasoning is comprehensive and cites specific numbers. The only minor weakness is a slight ambiguity in terminology around 'reverse repo' vs. 'repo' that doesn't affect the correctness of the output but could be clearer.</td>
+        </tr>
+        <tr>
+            <td>Mixed maturities offsetting: Same counterparty, different months net to zero</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "Barclays net exposure across all maturities",
+          "dimension": "counterparty",
+          "filter": "Barclays",
+          "lower_bound": -200000000,
+          "upper_bound": 200000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Barclays",
+      "notional": 150000000,
+      "maturity": "2026-06-15"
+    },
+    {
+      "counterparty": "Barclays",
+      "notional": -150000000,
+      "maturity": "2026-09-20"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Goldman Sachs",
+    "notional": 100000000,
+    "maturity": "2026-07-10"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": false,
+          "net_value": 0,
+          "lower_bound": -200000000,
+          "upper_bound": 200000000
+        }
+      ],
+      "reasoning": "Barclays net = 150M + (-150M) = 0, well within [-200M, 200M]. Long and short positions in different maturities offset completely"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: Counterparty exposures fully netted across maturities"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 0,
+          "lower_bound": -200000000,
+          "upper_bound": 200000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 1 aggregates net notional for counterparty Barclays across all maturities. Current book has +150M (2026-06) and -150M (2026-09), netting to 0. Proposed trade is with Goldman Sachs, so does not affect Barclays exposure. Post-trade net value is 0 GBP, which falls within the range [-200M, 200M]. Child rule is not breached. Parent rule uses AND logic with only one child, so parent is not breached."
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "Trade approved. Barclays net exposure remains at 0 GBP, well within limits. No PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output correctly identifies that Barclays' net exposure across all maturities is 0 (150M + (-150M) = 0), which falls well within the [-200M, 200M] bounds. The child rule is not breached, and since the parent uses AND logic with only one child, the parent is also not breached. The proposed Goldman Sachs trade is correctly excluded from the Barclays counterparty calculation. All critical values match the ground truth: net_value=0, both breach flags=false, pm_override_required=false. The reasoning demonstrates understanding of cross-maturity netting and correctly applies the AND logic rule. The verdict is accurate and appropriately justified.</td>
+        </tr>
+        <tr>
+            <td>Breach only at lower bound: Net goes below lower_bound</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "JPM short position limit",
+          "dimension": "counterparty",
+          "filter": "JPM",
+          "lower_bound": -100000000,
+          "upper_bound": 200000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "JPM",
+      "notional": -80000000,
+      "maturity": "2026-06-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "JPM",
+    "notional": -50000000,
+    "maturity": "2026-07-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": -130000000,
+          "lower_bound": -100000000,
+          "upper_bound": 200000000
+        }
+      ],
+      "reasoning": "JPM net = -80M + (-50M) = -130M, below lower bound of -100M. Trade increases short exposure beyond limit"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: JPM short position exceeds lower bound limit. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": -130000000,
+          "lower_bound": -100000000,
+          "upper_bound": 200000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 aggregates net notional for counterparty JPM. Current book has -80000000, proposed trade adds -50000000, resulting in net -130000000. This falls strictly below the lower_bound of -100000000, breaching the rule. Parent rule 1 uses AND logic with a single child; since that child is breached, the parent is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected: JPM short position would reach -130M GBP, exceeding the lower limit of -100M GBP. PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is mathematically and logically correct. The net position calculation (-80M + -50M = -130M) is accurate. The breach detection is correct: -130M is strictly below the lower_bound of -100M. The AND logic is properly applied: with one child rule that breaches, the parent rule (using AND logic) correctly breaches. The critical field `pm_override_required` is correctly set to true. The reasoning provided is comprehensive and cites specific numbers throughout. The verdict appropriately rejects the trade and indicates PM override is needed. The only minor deviation is the introduction of 'GBP' currency notation in the verdict, which doesn't appear in the input or ground truth, but this is cosmetic and doesn't affect correctness.</td>
+        </tr>
+        <tr>
+            <td>Both parent rules breached: Counterparty and maturity thresholds exceeded</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "HSBC exposure threshold",
+          "dimension": "counterparty",
+          "filter": "HSBC",
+          "lower_bound": -150000000,
+          "upper_bound": 150000000
+        }
+      ]
+    },
+    {
+      "parent_rule_id": 2,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 2,
+          "description": "December 2026 threshold",
+          "dimension": "maturity_month",
+          "filter": "2026-12",
+          "lower_bound": -150000000,
+          "upper_bound": 150000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "HSBC",
+      "notional": 120000000,
+      "maturity": "2026-12-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "HSBC",
+    "notional": 80000000,
+    "maturity": "2026-12-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 200000000,
+          "lower_bound": -150000000,
+          "upper_bound": 150000000
+        }
+      ],
+      "reasoning": "HSBC net = 120M + 80M = 200M, exceeds 150M upper bound"
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 2,
+          "breached": true,
+          "net_value": 200000000,
+          "lower_bound": -150000000,
+          "upper_bound": 150000000
+        }
+      ],
+      "reasoning": "December net = 120M + 80M = 200M, exceeds 150M upper bound"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: HSBC counterparty and December maturity thresholds both exceeded. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 200000000,
+          "lower_bound": -150000000,
+          "upper_bound": 150000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 (HSBC counterparty exposure) calculates net notional by aggregating all positions with counterparty HSBC. Current book has 120000000 GBP; proposed trade adds 80000000 GBP. Post-trade net notional = 200000000 GBP. This exceeds the upper_bound of 150000000 GBP, so the child rule is breached. Parent rule 1 uses AND logic with only one child, so parent is breached."
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 2,
+          "net_value": 200000000,
+          "lower_bound": -150000000,
+          "upper_bound": 150000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 2 (December 2026 maturity concentration) calculates net notional by aggregating all positions maturing in 2026-12. Current book has one position maturing 2026-12-15 with notional 120000000 GBP; proposed trade matures 2026-12-20 with notional 80000000 GBP. Post-trade net notional = 200000000 GBP. This exceeds the upper_bound of 150000000 GBP, so the child rule is breached. Parent rule 2 uses AND logic with only one child, so parent is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected. Both parent rules breached: HSBC counterparty exposure would reach 200M GBP (limit 150M), and December 2026 maturity concentration would reach 200M GBP (limit 150M). PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is fully correct. Both parent rules breach because: (1) HSBC counterparty exposure: 120M + 80M = 200M exceeds 150M upper bound; (2) December 2026 maturity: 120M + 80M = 200M exceeds 150M upper bound. Both parent rules use AND logic with a single child each, so when the child breaches, the parent breaches. The pm_override_required flag is correctly set to true. The verdict accurately summarizes both breaches with specific numbers. All calculations are accurate and the AND-logic evaluation is correct (no partial-breach errors). The reasoning provided is thorough and mathematically sound, citing specific notional amounts and explaining the aggregation methodology.</td>
+        </tr>
+        <tr>
+            <td>Complex scenario: Three parent rules, mixed outcomes</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "June 2026 limit",
+          "dimension": "maturity_month",
+          "filter": "2026-06",
+          "lower_bound": -100000000,
+          "upper_bound": 100000000
+        }
+      ]
+    },
+    {
+      "parent_rule_id": 2,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 2,
+          "description": "July 2026 limit",
+          "dimension": "maturity_month",
+          "filter": "2026-07",
+          "lower_bound": -150000000,
+          "upper_bound": 150000000
+        }
+      ]
+    },
+    {
+      "parent_rule_id": 3,
+      "type": "counterparty",
+      "logic": "OR",
+      "children": [
+        {
+          "id": 3,
+          "description": "Morgan Stanley check",
+          "dimension": "counterparty",
+          "filter": "Morgan Stanley",
+          "lower_bound": -300000000,
+          "upper_bound": 300000000
+        },
+        {
+          "id": 4,
+          "description": "Deutsche Bank check",
+          "dimension": "counterparty",
+          "filter": "Deutsche Bank",
+          "lower_bound": -300000000,
+          "upper_bound": 300000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Morgan Stanley",
+      "notional": 120000000,
+      "maturity": "2026-06-15"
+    },
+    {
+      "counterparty": "Deutsche Bank",
+      "notional": 100000000,
+      "maturity": "2026-07-20"
+    },
+    {
+      "counterparty": "Barclays",
+      "notional": 50000000,
+      "maturity": "2026-08-10"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Morgan Stanley",
+    "notional": 50000000,
+    "maturity": "2026-06-25"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 170000000,
+          "lower_bound": -100000000,
+          "upper_bound": 100000000
+        }
+      ],
+      "reasoning": "June net = 120M + 50M = 170M, exceeds 100M upper bound"
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 2,
+          "breached": false,
+          "net_value": 100000000,
+          "lower_bound": -150000000,
+          "upper_bound": 150000000
+        }
+      ],
+      "reasoning": "July net = 100M, within [-150M, 150M]"
+    },
+    {
+      "parent_rule_id": 3,
+      "logic": "OR",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 3,
+          "breached": false,
+          "net_value": 170000000,
+          "lower_bound": -300000000,
+          "upper_bound": 300000000
+        },
+        {
+          "id": 4,
+          "breached": false,
+          "net_value": 100000000,
+          "lower_bound": -300000000,
+          "upper_bound": 300000000
+        }
+      ],
+      "reasoning": "Morgan Stanley net = 170M, within [-300M, 300M]. Deutsche Bank net = 100M, within [-300M, 300M]. OR logic: no children breached"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: June 2026 maturity concentration breached. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 170000000,
+          "lower_bound": -100000000,
+          "upper_bound": 100000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 (June 2026 maturity limit) is breached. Post-trade, the net notional for maturity month 2026-06 is 170000000 GBP (120000000 from existing Morgan Stanley position + 50000000 from proposed trade). This exceeds the upper_bound of 100000000 GBP. Since this is an AND parent with only one child, the parent is breached."
+    },
+    {
+      "parent_rule_id": 2,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 2,
+          "net_value": 100000000,
+          "lower_bound": -150000000,
+          "upper_bound": 150000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 2 (July 2026 maturity limit) is not breached. Post-trade, the net notional for maturity month 2026-07 is 100000000 GBP (from the existing Deutsche Bank position). This falls within the range [-150000000, 150000000]. Since this is an AND parent with only one child and that child is not breached, the parent is not breached."
+    },
+    {
+      "parent_rule_id": 3,
+      "logic": "OR",
+      "child_results": [
+        {
+          "id": 3,
+          "net_value": 170000000,
+          "lower_bound": -300000000,
+          "upper_bound": 300000000,
+          "breached": false
+        },
+        {
+          "id": 4,
+          "net_value": 100000000,
+          "lower_bound": -300000000,
+          "upper_bound": 300000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 3 (Morgan Stanley counterparty check): net notional is 170000000 GBP (120000000 existing + 50000000 proposed), within [-300000000, 300000000]. Child rule 4 (Deutsche Bank counterparty check): net notional is 100000000 GBP, within [-300000000, 300000000]. Since this is an OR parent and neither child is breached, the parent is not breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "PM override required. Parent rule 1 (concentration_maturity for June 2026) is breached: post-trade net notional of 170000000 GBP exceeds the upper limit of 100000000 GBP."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">9</span></td>
+            <td>The engine output is functionally correct across all critical dimensions. Parent rule 1 (AND logic, single child): correctly identifies breach because the child rule breaches (170M > 100M upper bound). Parent rule 2 (AND logic, single child): correctly identifies no breach because the child does not breach (100M within [-150M, 150M]). Parent rule 3 (OR logic, two children): correctly identifies no breach because neither child breaches (both within [-300M, 300M]). The pm_override_required flag is correctly set to true, and the verdict correctly identifies the June 2026 maturity concentration as the breach reason. All net_value calculations are accurate. The reasoning is comprehensive and cites specific numbers. The only minor deviation is stylistic formatting of the final verdict message, which does not affect the correctness of the compliance decision.</td>
+        </tr>
+        <tr>
+            <td>Trade with same counterparty, different maturity: Dimensional isolation</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "concentration_maturity",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "July 2026 net limit",
+          "dimension": "maturity_month",
+          "filter": "2026-07",
+          "lower_bound": -120000000,
+          "upper_bound": 120000000
+        },
+        {
+          "id": 2,
+          "description": "August 2026 net limit",
+          "dimension": "maturity_month",
+          "filter": "2026-08",
+          "lower_bound": -120000000,
+          "upper_bound": 120000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "JPM",
+      "notional": 100000000,
+      "maturity": "2026-07-15"
+    },
+    {
+      "counterparty": "JPM",
+      "notional": 50000000,
+      "maturity": "2026-08-20"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "JPM",
+    "notional": 80000000,
+    "maturity": "2026-08-25"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": false,
+          "net_value": 100000000,
+          "lower_bound": -120000000,
+          "upper_bound": 120000000
+        },
+        {
+          "id": 2,
+          "breached": true,
+          "net_value": 130000000,
+          "lower_bound": -120000000,
+          "upper_bound": 120000000
+        }
+      ],
+      "reasoning": "July net = 100M, within bounds (not breached). August net = 50M + 80M = 130M, exceeds 120M upper bound (breached). AND logic requires ALL children to breach for the parent to breach; only August breaches, so the parent is not breached"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: AND parent not triggered (only one of two dimensions breached). No override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 100000000,
+          "lower_bound": -120000000,
+          "upper_bound": 120000000,
+          "breached": false
+        },
+        {
+          "id": 2,
+          "net_value": 130000000,
+          "lower_bound": -120000000,
+          "upper_bound": 120000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 (July 2026): net notional is 100000000 GBP, within bounds [-120000000, 120000000]. Child rule 2 (August 2026): net notional is 50000000 + 80000000 = 130000000 GBP, which exceeds the upper bound of 120000000 GBP. Since this is an AND parent rule, it is breached because not all children pass (child 2 is breached)."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected: August 2026 maturity concentration would reach 130M GBP, exceeding the 120M GBP limit. PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-low">2</span></td>
+            <td>The engine correctly calculates net values (100M for July, 130M for August) and correctly identifies that child rule 2 is breached (130M > 120M limit). However, it fundamentally misapplies AND-logic semantics. Under AND logic, a parent is breached only when ALL children are breached. Here, child 1 passes (100M within bounds) while child 2 fails. Therefore, the parent should NOT be breached, pm_override_required should be false, and the verdict should be APPROVED. The engine's reasoning explicitly states the wrong rule: 'it is breached because not all children pass' inverts the correct AND semantics. This is a critical compliance error that would incorrectly reject a compliant trade.</td>
+        </tr>
+        <tr>
+            <td>Large positive long position, small offsetting repo</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "Long position aggregate cap",
+          "dimension": "counterparty",
+          "filter": "Goldman Sachs",
+          "lower_bound": -600000000,
+          "upper_bound": 600000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Goldman Sachs",
+      "notional": 550000000,
+      "maturity": "2026-06-15"
+    },
+    {
+      "counterparty": "Goldman Sachs",
+      "notional": -20000000,
+      "maturity": "2026-07-10"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Goldman Sachs",
+    "notional": 100000000,
+    "maturity": "2026-09-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 630000000,
+          "lower_bound": -600000000,
+          "upper_bound": 600000000
+        }
+      ],
+      "reasoning": "Goldman Sachs net = 550M + (-20M) + 100M = 630M, exceeds upper bound of 600M by 30M"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: Goldman Sachs exposure cap breached. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 630000000,
+          "lower_bound": -600000000,
+          "upper_bound": 600000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 aggregates net notional for counterparty Goldman Sachs. Current book: 550000000 + (-20000000) = 530000000. After adding proposed trade of 100000000: 530000000 + 100000000 = 630000000. This net value of 630000000 exceeds the upper_bound of 600000000, so the child rule is breached. Parent rule 1 uses AND logic with only one child, so the parent is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected. Goldman Sachs net position would reach 630M GBP, exceeding the 600M GBP upper limit. PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is mathematically and logically correct across all critical dimensions. The net_value of 630,000,000 is accurately calculated: 550M (existing long) + (-20M) (existing short) + 100M (proposed trade) = 630M. This correctly exceeds the upper_bound of 600M. The AND logic is properly applied: with one child rule that breaches, the parent rule breaches. The `pm_override_required` flag is correctly set to true, and the verdict appropriately rejects the trade with clear reasoning. The output matches the expected ground truth in all substantive respects.</td>
+        </tr>
+        <tr>
+            <td>Very small notional near threshold: Precision edge case</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "Precise counterparty limit",
+          "dimension": "counterparty",
+          "filter": "Deutsche Bank",
+          "lower_bound": -500000,
+          "upper_bound": 500000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Deutsche Bank",
+      "notional": 450000,
+      "maturity": "2026-06-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Deutsche Bank",
+    "notional": 100000,
+    "maturity": "2026-07-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 550000,
+          "lower_bound": -500000,
+          "upper_bound": 500000
+        }
+      ],
+      "reasoning": "Deutsche Bank net = 450k + 100k = 550k, exceeds 500k upper bound by exactly 50k"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: Deutsche Bank exposure exceeds precise limit. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 550000,
+          "lower_bound": -500000,
+          "upper_bound": 500000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 aggregates net notional for Deutsche Bank across the book. Current position: 450000 GBP. Proposed trade adds 100000 GBP. Post-trade net notional: 550000 GBP. This exceeds the upper_bound of 500000 GBP, so the child rule is breached. Parent rule uses AND logic with a single child; since that child is breached, the parent is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected: Deutsche Bank counterparty limit breached. Post-trade net notional of 550000 GBP exceeds upper limit of 500000 GBP. PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">9</span></td>
+            <td>The engine output is functionally and mathematically correct across all critical dimensions. The `pm_override_required` flag is true (matches ground truth). Both child rule 1 and parent rule 1 are correctly marked as breached. The net_value of 550000 is accurate (450k current + 100k proposed). The AND logic is correctly applied: with one child rule breached and AND logic, the parent is breached. The reasoning provided is thorough and cites specific numbers (450000, 100000, 550000, 500000 bounds). The verdict correctly rejects the trade and mandates PM override. The only minor gap is that the ground truth explicitly mentions the overage amount ("exceeds 500k upper bound by exactly 50k"), which the engine output does not state, but this is a presentation detail rather than a correctness error.</td>
+        </tr>
+        <tr>
+            <td>MtM counterparty exposure: Within MtM bounds across multiple positions</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "Barclays mark-to-market exposure limit",
+          "dimension": "counterparty_mtm",
+          "filter": "Barclays",
+          "lower_bound": -50000000,
+          "upper_bound": 50000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Barclays",
+      "notional": 100000000,
+      "mtm": 15000000,
+      "maturity": "2026-07-15"
+    },
+    {
+      "counterparty": "Barclays",
+      "notional": -50000000,
+      "mtm": -8000000,
+      "maturity": "2026-08-20"
+    },
+    {
+      "counterparty": "JPM",
+      "notional": 200000000,
+      "mtm": 25000000,
+      "maturity": "2026-09-10"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Barclays",
+    "notional": 75000000,
+    "mtm": 10000000,
+    "maturity": "2026-10-15"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": false,
+          "net_value": 17000000,
+          "lower_bound": -50000000,
+          "upper_bound": 50000000
+        }
+      ],
+      "reasoning": "Barclays MtM = 15M + (-8M) + 10M = 17M, within [-50M, 50M]. JPM positions excluded (different counterparty)"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: Barclays MtM exposure within limits"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 17000000,
+          "lower_bound": -50000000,
+          "upper_bound": 50000000,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 1 (Barclays counterparty_mtm) aggregates mark-to-market exposure across all Barclays positions post-trade. Current book Barclays mtm: 15000000 + (-8000000) = 7000000. Adding proposed trade mtm of 10000000 gives net_value of 17000000 GBP. This falls within the bounds [-50000000, 50000000], so the child rule is not breached. Parent rule uses AND logic with only one child, so parent is not breached."
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "Trade approved. Barclays mark-to-market exposure of 17000000 GBP remains within the -50000000 to 50000000 GBP limit."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is mathematically and logically sound. The net_value of 17,000,000 GBP is correctly calculated as 15M + (-8M) + 10M = 17M from the three Barclays positions (current book + proposed trade). This value falls within the [-50M, 50M] bounds, so child rule 1 is not breached. The parent rule uses AND logic with a single child, so the parent is correctly marked as not breached. The `pm_override_required` flag is correctly set to false, and the verdict appropriately approves the trade. The reasoning provided is comprehensive and cites specific numbers. The output matches the expected ground truth in all critical dimensions: breach flags, net_value, bounds, and final verdict.</td>
+        </tr>
+        <tr>
+            <td>MtM counterparty breach: Unrealised gains push MtM past upper limit</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "JPM mark-to-market exposure cap",
+          "dimension": "counterparty_mtm",
+          "filter": "JPM",
+          "lower_bound": -50000000,
+          "upper_bound": 50000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "JPM",
+      "notional": 200000000,
+      "mtm": 35000000,
+      "maturity": "2026-07-15"
+    },
+    {
+      "counterparty": "JPM",
+      "notional": 100000000,
+      "mtm": 12000000,
+      "maturity": "2026-09-20"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "JPM",
+    "notional": 150000000,
+    "mtm": 18000000,
+    "maturity": "2026-11-10"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 65000000,
+          "lower_bound": -50000000,
+          "upper_bound": 50000000
+        }
+      ],
+      "reasoning": "JPM MtM = 35M + 12M + 18M = 65M, exceeds upper bound of 50M by 15M"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: JPM MtM exposure exceeds cap. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 65000000,
+          "lower_bound": -50000000,
+          "upper_bound": 50000000,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 aggregates mark-to-market exposure for counterparty JPM. Current book MTM: 35,000,000 + 12,000,000 = 47,000,000. Proposed trade MTM: 18,000,000. Post-trade net MTM: 47,000,000 + 18,000,000 = 65,000,000 GBP. This exceeds the upper_bound of 50,000,000, so the child rule is breached. Parent rule uses AND logic with only one child, so parent is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "Trade rejected. JPM mark-to-market exposure would reach 65,000,000 GBP, exceeding the 50,000,000 GBP limit. PM override required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">9</span></td>
+            <td>The engine output correctly identifies that JPM's post-trade MtM exposure (65M) breaches the upper bound (50M). The calculation is accurate: current book (35M + 12M = 47M) plus proposed trade (18M) equals 65M. The AND logic is correctly applied—with one child rule breached, the parent is breached. The `pm_override_required` flag is correctly set to true, and the verdict properly rejects the trade with PM override requirement. The reasoning is comprehensive and cites specific values throughout. The only minor gap is not explicitly stating the 15M overage, but this is a presentation detail rather than a substantive error.</td>
+        </tr>
+        <tr>
+            <td>OR parent with MtM children: One counterparty MtM breaches</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "OR",
+      "children": [
+        {
+          "id": 1,
+          "description": "Barclays MtM threshold",
+          "dimension": "counterparty_mtm",
+          "filter": "Barclays",
+          "lower_bound": -40000000,
+          "upper_bound": 40000000
+        },
+        {
+          "id": 2,
+          "description": "Citi MtM threshold",
+          "dimension": "counterparty_mtm",
+          "filter": "Citi",
+          "lower_bound": -40000000,
+          "upper_bound": 40000000
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Barclays",
+      "notional": 150000000,
+      "mtm": 22000000,
+      "maturity": "2026-07-15"
+    },
+    {
+      "counterparty": "Citi",
+      "notional": 80000000,
+      "mtm": -12000000,
+      "maturity": "2026-08-20"
+    },
+    {
+      "counterparty": "Barclays",
+      "notional": -50000000,
+      "mtm": -5000000,
+      "maturity": "2026-09-10"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Barclays",
+    "notional": 100000000,
+    "mtm": 25000000,
+    "maturity": "2026-10-15"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "OR",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 42000000,
+          "lower_bound": -40000000,
+          "upper_bound": 40000000
+        },
+        {
+          "id": 2,
+          "breached": false,
+          "net_value": -12000000,
+          "lower_bound": -40000000,
+          "upper_bound": 40000000
+        }
+      ],
+      "reasoning": "Barclays MtM = 22M + (-5M) + 25M = 42M, exceeds 40M upper bound. Citi MtM = -12M, within [-40M, 40M]. OR logic: breach triggered by at least one child (Barclays breaches)"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: Barclays MtM exposure exceeds threshold. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "OR",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 42000000,
+          "lower_bound": -40000000,
+          "upper_bound": 40000000,
+          "breached": true
+        },
+        {
+          "id": 2,
+          "net_value": -12000000,
+          "lower_bound": -40000000,
+          "upper_bound": 40000000,
+          "breached": false
+        }
+      ],
+      "breached": true,
+      "reasoning": "Parent rule 1 uses OR logic, so it is breached if ANY child rule is breached. Child rule 1 (Barclays MtM) has a net_value of 42000000 GBP, which exceeds the upper_bound of 40000000 GBP, so it is breached. Child rule 2 (Citi MtM) has a net_value of -12000000 GBP, which falls within the range [-40000000, 40000000], so it is not breached. Since at least one child rule is breached, the parent rule is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "PM override required. Proposed trade breaches Barclays MtM threshold (child rule 1): post-trade aggregate MtM of 42,000,000 GBP exceeds upper limit of 40,000,000 GBP."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output is mathematically and logically sound. All critical compliance signals are correct: pm_override_required is true, the parent rule correctly evaluates to breached=true under OR logic (since at least one child breaches), and both child evaluations are accurate. Barclays MtM aggregates to 42M (22M + (-5M) + 25M = 42M), which correctly exceeds the 40M upper bound. Citi MtM of -12M correctly falls within [-40M, 40M]. The reasoning explicitly walks through the OR logic and cites specific values. The verdict is clear and compliant-focused. No mathematical errors, no logic errors, and no missing information compared to ground truth.</td>
+        </tr>
+        <tr>
+            <td>Percentage counterparty limit: Exposure within percentage cap of total limit</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "Goldman Sachs percentage of total counterparty limit",
+          "dimension": "counterparty_pct",
+          "filter": "Goldman Sachs",
+          "total_limit": 500000000,
+          "lower_bound": -30,
+          "upper_bound": 30
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Goldman Sachs",
+      "notional": 80000000,
+      "maturity": "2026-07-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Goldman Sachs",
+    "notional": 40000000,
+    "maturity": "2026-09-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": false,
+          "net_value": 24,
+          "lower_bound": -30,
+          "upper_bound": 30
+        }
+      ],
+      "reasoning": "Goldman Sachs net notional = 80M + 40M = 120M. Percentage = (120M / 500M) * 100 = 24%, within [-30%, 30%]"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: Goldman Sachs exposure at 24% of total limit, within bounds"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 24.0,
+          "lower_bound": -30,
+          "upper_bound": 30,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Child rule 1 (Goldman Sachs counterparty_pct) calculates net notional post-trade as 80,000,000 + 40,000,000 = 120,000,000 GBP. Expressed as percentage of total_limit (500,000,000): (120,000,000 / 500,000,000) * 100 = 24.0%. This falls within the bounds [-30, 30], so the child rule is not breached. Parent rule 1 uses AND logic with only one child; since that child is not breached, the parent is not breached."
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "Trade approved. No rule breaches detected. PM override not required."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">9</span></td>
+            <td>The engine output is functionally and mathematically correct across all critical dimensions. The net notional calculation (80M + 40M = 120M) is accurate, the percentage calculation (120M/500M × 100 = 24%) is precise, and the bounds check is properly applied. The AND-logic parent rule correctly evaluates to not breached since its single child is not breached. The pm_override_required flag is correctly set to false, and the verdict appropriately approves the trade. The reasoning is detailed and cites specific numbers. The only minor issue is an unsourced currency reference ('GBP') in the reasoning, which does not affect the correctness of the compliance decision.</td>
+        </tr>
+        <tr>
+            <td>Percentage counterparty breach: Trade pushes exposure past percentage cap</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "Morgan Stanley percentage of total counterparty limit",
+          "dimension": "counterparty_pct",
+          "filter": "Morgan Stanley",
+          "total_limit": 500000000,
+          "lower_bound": -50,
+          "upper_bound": 50
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "Morgan Stanley",
+      "notional": 200000000,
+      "maturity": "2026-07-15"
+    },
+    {
+      "counterparty": "Morgan Stanley",
+      "notional": 50000000,
+      "maturity": "2026-09-20"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "Morgan Stanley",
+    "notional": 100000000,
+    "maturity": "2026-11-10"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": true,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 70,
+          "lower_bound": -50,
+          "upper_bound": 50
+        }
+      ],
+      "reasoning": "Morgan Stanley net notional = 200M + 50M + 100M = 350M. Percentage = (350M / 500M) * 100 = 70%, exceeds upper bound of 50%"
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "REJECTED: Morgan Stanley exposure at 70% of total limit, exceeds 50% cap. PM override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 70.0,
+          "lower_bound": -50,
+          "upper_bound": 50,
+          "breached": true
+        }
+      ],
+      "breached": true,
+      "reasoning": "Child rule 1 (Morgan Stanley counterparty_pct) calculates net notional for Morgan Stanley post-trade as 200000000 + 50000000 + 100000000 = 350000000 GBP. Expressed as percentage of total_limit (500000000): (350000000 / 500000000) * 100 = 70.0%. This exceeds the upper_bound of 50%, so the child rule is breached. Since the parent uses AND logic with only one child, the parent is breached."
+    }
+  ],
+  "pm_override_required": true,
+  "verdict": "PM override required. Proposed trade breaches Morgan Stanley counterparty percentage limit, pushing net exposure to 70% of the 500M limit (upper bound: 50%)."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">10</span></td>
+            <td>The engine output demonstrates complete correctness across all critical dimensions. The pm_override_required flag is correctly set to true. The parent rule (id 1) is correctly marked as breached, and the single child rule is correctly marked as breached. The net_value of 70.0% is mathematically accurate: (200M + 50M + 100M) / 500M * 100 = 70%. The upper_bound violation (70% > 50%) is correctly identified. The AND logic is properly applied—since there is only one child and it breaches, the parent correctly breaches. The reasoning provided is comprehensive, citing specific notional amounts, the calculation formula, and the limit comparison. The only minor deviation is the verdict phrasing ('PM override required' vs 'REJECTED: ...'), but both convey the same compliance decision and are functionally equivalent.</td>
+        </tr>
+        <tr>
+            <td>Mixed MtM and percentage children: AND parent with partial breach</td>
+            <td><pre>{
+  "rules": [
+    {
+      "parent_rule_id": 1,
+      "type": "counterparty",
+      "logic": "AND",
+      "children": [
+        {
+          "id": 1,
+          "description": "HSBC MtM exposure check",
+          "dimension": "counterparty_mtm",
+          "filter": "HSBC",
+          "lower_bound": -25000000,
+          "upper_bound": 25000000
+        },
+        {
+          "id": 2,
+          "description": "HSBC percentage of total limit",
+          "dimension": "counterparty_pct",
+          "filter": "HSBC",
+          "total_limit": 600000000,
+          "lower_bound": -50,
+          "upper_bound": 50
+        }
+      ]
+    }
+  ],
+  "current_book": [
+    {
+      "counterparty": "HSBC",
+      "notional": 100000000,
+      "mtm": 20000000,
+      "maturity": "2026-07-15"
+    }
+  ],
+  "proposed_trade": {
+    "counterparty": "HSBC",
+    "notional": 50000000,
+    "mtm": 10000000,
+    "maturity": "2026-09-20"
+  }
+}</pre></td>
+            <td><pre>{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "breached": false,
+      "child_results": [
+        {
+          "id": 1,
+          "breached": true,
+          "net_value": 30000000,
+          "lower_bound": -25000000,
+          "upper_bound": 25000000
+        },
+        {
+          "id": 2,
+          "breached": false,
+          "net_value": 25,
+          "lower_bound": -50,
+          "upper_bound": 50
+        }
+      ],
+      "reasoning": "HSBC MtM = 20M + 10M = 30M, exceeds 25M upper bound (breached). HSBC net notional = 100M + 50M = 150M, percentage = (150M / 600M) * 100 = 25%, within [-50%, 50%] (not breached). AND logic requires ALL children to breach; only MtM breaches, so parent not breached"
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "APPROVED: AND parent not triggered (only MtM child breached, percentage within bounds). No override required"
+}</pre></td>
+            <td><pre>```json
+{
+  "parent_results": [
+    {
+      "parent_rule_id": 1,
+      "logic": "AND",
+      "child_results": [
+        {
+          "id": 1,
+          "net_value": 30000000,
+          "lower_bound": -25000000,
+          "upper_bound": 25000000,
+          "breached": true
+        },
+        {
+          "id": 2,
+          "net_value": 25.0,
+          "lower_bound": -50,
+          "upper_bound": 50,
+          "breached": false
+        }
+      ],
+      "breached": false,
+      "reasoning": "Parent rule 1 uses AND logic, so it is breached only if ALL children are breached. Child rule 1 (counterparty_mtm for HSBC) has net_value of 30,000,000 GBP, which exceeds the upper_bound of 25,000,000 GBP, so it is breached. Child rule 2 (counterparty_pct for HSBC) has net_value of 25.0%, which falls within the range [-50, 50], so it is not breached. Since not all children are breached, the parent rule is not breached."
+    }
+  ],
+  "pm_override_required": false,
+  "verdict": "Trade can proceed without PM override. While child rule 1 (MtM exposure) is breached at 30M GBP vs 25M limit, the AND logic parent rule is not breached because child rule 2 (percentage limit) is compliant at 25% vs ±50% bounds."
+}
+```</pre></td>
+            <td class="score-col"><span class="score score-high">9</span></td>
+            <td>The engine output correctly identifies that with AND logic, the parent rule breaches only if ALL children breach. Here, child 1 (MtM) breaches at 30M vs 25M upper bound, but child 2 (percentage) does not breach at 25% vs ±50% bounds. Since only one child breaches, the AND parent is not breached. The pm_override_required flag is correctly set to false, and the verdict appropriately approves the trade. All numerical calculations are accurate: net MtM of 30M and net percentage of 25%. The reasoning demonstrates correct understanding of AND-logic semantics.</td>
+        </tr></tbody>
+</table>
+</body>
+</html>

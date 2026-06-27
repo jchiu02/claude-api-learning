@@ -1,0 +1,214 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f4f5f7;
+  color: #1a1a2e;
+}
+
+header {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.controls label {
+  font-size: 13px;
+  color: #a0a0b8;
+}
+
+.controls select {
+  padding: 6px 12px;
+  border: 1px solid #3a3a5c;
+  border-radius: 4px;
+  background: #2a2a4a;
+  color: #fff;
+  font-size: 13px;
+  min-width: 220px;
+  cursor: pointer;
+}
+
+.controls select:focus {
+  outline: none;
+  border-color: #6c63ff;
+}
+
+main {
+  padding: 20px 24px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #888;
+  font-size: 15px;
+}
+
+.hidden {
+  display: none;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+thead th {
+  background: #2a2a4a;
+  color: #d0d0e0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 10px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.col-bond { width: 18%; }
+.col-isin { width: 14%; }
+.col-type { width: 9%; }
+.col-cpty { width: 11%; }
+
+thead .col-tn {
+  text-align: right;
+  width: 8%;
+}
+
+tbody tr {
+  border-bottom: 1px solid #eee;
+  transition: background 0.15s;
+}
+
+tbody tr:last-child {
+  border-bottom: none;
+}
+
+/* Parent (net available) rows */
+tr.parent-row {
+  background: #f0f1f5;
+  cursor: pointer;
+}
+
+tr.parent-row:hover {
+  background: #e4e5ec;
+}
+
+tr.parent-row td {
+  font-weight: 600;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+tr.parent-row .chevron {
+  display: inline-block;
+  width: 14px;
+  font-size: 10px;
+  color: #666;
+  transition: transform 0.2s;
+  margin-right: 6px;
+}
+
+tr.parent-row.expanded .chevron {
+  transform: rotate(90deg);
+}
+
+/* Child rows */
+tr.child-row {
+  display: none;
+}
+
+tr.child-row.visible {
+  display: table-row;
+}
+
+tr.child-row td {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #444;
+}
+
+tr.child-row:hover {
+  background: #fafafa;
+}
+
+tr.child-row td:first-child {
+  padding-left: 36px;
+}
+
+/* Number cells */
+td.num {
+  text-align: right;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+tr.parent-row td.num {
+  font-size: 13px;
+}
+
+/* Positive net = green tint, negative = red tint */
+td.num.positive {
+  color: #1b7a3d;
+}
+
+td.num.negative {
+  color: #c0392b;
+}
+
+/* Matured repo cell (shows 0) */
+td.num.matured {
+  color: #bbb;
+  font-style: italic;
+}
+
+/* Type badge */
+.type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.type-badge.net {
+  background: #e8eaf6;
+  color: #283593;
+}
+
+.type-badge.bond {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.type-badge.repo {
+  background: #fff3e0;
+  color: #e65100;
+}

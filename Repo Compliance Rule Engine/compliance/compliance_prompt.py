@@ -29,7 +29,15 @@ All evaluations are net and post-trade:
 - Negative notional = repo (cash in from counterparty, collateral out)
 - Positions in the same maturity window or with the same counterparty
   offset each other in net calculations
+- mtm = mark-to-market value of a position (positive = unrealised gain,
+  negative = unrealised loss). Only present when counterparty_mtm rules apply
 </sign_convention>
+
+<rule_types>
+Each parent rule has a "type" that constrains its children's dimensions:
+- "concentration_maturity": children can only use dimension "maturity_month"
+- "counterparty": children can only use dimensions "counterparty", "counterparty_mtm", or "counterparty_pct"
+</rule_types>
 
 <rule_dimensions>
 maturity_month: aggregate net notional of all positions whose maturity
@@ -37,6 +45,15 @@ falls in the filter month (YYYY-MM format)
 
 counterparty: aggregate net notional of all positions with the specified
 counterparty in the filter field
+
+counterparty_mtm: aggregate the mtm field (not notional) of all positions
+with the specified counterparty. Each position carries an mtm field
+representing its current mark-to-market exposure in GBP
+
+counterparty_pct: aggregate net notional of all positions with the specified
+counterparty, then express as a percentage of the child rule's total_limit.
+Formula: net_value = (net_notional / total_limit) * 100
+Bounds are percentages (e.g. lower_bound=-50, upper_bound=50 means ±50%)
 </rule_dimensions>
 
 <logic_rules>
@@ -47,22 +64,24 @@ outside the range: net_value < lower_bound OR net_value > upper_bound
 </logic_rules>
 
 <output_format>
-Return your response as a JSON object with this exact structure:
+Return your response as a JSON object with this exact structure. Fields are
+ordered deliberately - compute child_results before deciding the parent's
+breached flag, and write reasoning last, after the flags are settled:
 {
   "parent_results": [
     {
-      "parent_rule_id": "string from input",
+      "parent_rule_id": "integer from input",
       "logic": "AND or OR from input",
-      "breached": boolean,
       "child_results": [
         {
-          "id": "string from input",
-          "breached": boolean,
-          "net_value": integer (calculated net for this dimension/filter post-trade in GBP),
+          "id": "integer from input",
+          "net_value": number (calculated net post-trade: GBP for notional/mtm dimensions, percentage for pct dimensions),
           "lower_bound": integer (from input),
-          "upper_bound": integer (from input)
+          "upper_bound": integer (from input),
+          "breached": boolean
         }
       ],
+      "breached": boolean,
       "reasoning": "explanation referencing the specific calculated net values and limits"
     }
   ],
@@ -72,8 +91,9 @@ Return your response as a JSON object with this exact structure:
 </output_format>
 
 <constraints>
-- net_value must be the actual computed integer in GBP, not a formula or string
+- net_value must be the actual computed number, not a formula or string (GBP for notional/mtm, percentage for pct)
 - Breach occurs when net_value is strictly outside the range (< lower_bound OR > upper_bound)
+- Compute child_results first; the parent's breached flag must be derived from the child_results you just wrote, never decided before them
 - pm_override_required must be true if and only if any parent has breached=true
 - Maintain consistency: child breach flags must match net_value vs bounds, parent breach must follow AND/OR logic, override must follow any-parent-breach
 - Return ONLY the JSON object, no markdown fences, no explanation text before or after
@@ -112,11 +132,12 @@ if __name__ == "__main__":
     task = {
         "rules": [
             {
-                "parent_rule_id": "COUNTERPARTY_EXPOSURE",
+                "parent_rule_id": 1,
+                "type": "counterparty",
                 "logic": "OR",
                 "children": [
                     {
-                        "id": "JPM_LIMIT",
+                        "id": 1,
                         "description": "JPM net exposure within [-200M, 200M]",
                         "dimension": "counterparty",
                         "filter": "JPM",
